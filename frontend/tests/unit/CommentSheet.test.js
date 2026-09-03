@@ -11,6 +11,8 @@ import CommentSheet from '@/components/CommentSheet.vue';
 import {
   isCommentSheetActive,
   openCommentSheet,
+  registerCommentSheetHost,
+  unregisterCommentSheetHost,
 } from '@/services/commentSheet';
 import { goCanComments, goNameplateComments, goNotFound } from '@/services/navigation';
 
@@ -260,6 +262,121 @@ describe('CommentSheet (Issue #219 后续)', () => {
       expect(wrapper.vm.active).toBe(true);
 
       wrapper.unmount();
+    });
+
+    describe('面板内多目标切换', () => {
+      const SCOPES = [
+        { type: 'can', id: 12, label: '本段录音', count: 3 },
+        { type: 'nameplate', id: 21, label: '巴适', count: 1 },
+        { type: 'nameplate', id: 22, label: '安逸', count: 4 },
+      ];
+
+      it('传 scopes(≥2) 渲染切换条并高亮初始目标', async () => {
+        const wrapper = mountSheet();
+        openCommentSheet({ targetType: 'can', targetId: 12, scopes: SCOPES });
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.hasScopes).toBe(true);
+        const chips = wrapper.findAll('.comment-sheet__scope');
+        expect(chips).toHaveLength(3);
+        expect(chips.at(0).text()).toContain('本段录音');
+        expect(chips.at(0).classes()).toContain('comment-sheet__scope--active');
+        expect(chips.at(1).text()).toContain('巴适');
+
+        wrapper.unmount();
+      });
+
+      it('单目标（不传 scopes）不渲染切换条，行为回归', async () => {
+        const wrapper = mountSheet();
+        openCommentSheet({ targetType: 'nameplate', targetId: 21 });
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.hasScopes).toBe(false);
+        expect(wrapper.find('.comment-sheet__scopes').exists()).toBe(false);
+
+        wrapper.unmount();
+      });
+
+      it('初始目标不在 scopes 时补到最前并高亮', async () => {
+        const wrapper = mountSheet();
+        openCommentSheet({ targetType: 'can', targetId: 99, scopes: SCOPES });
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.scopes[0]).toMatchObject({ type: 'can', id: 99 });
+        expect(wrapper.vm.activeScopeIndex).toBe(0);
+
+        wrapper.unmount();
+      });
+
+      it('切换 chip 更新目标、清空草稿与回复态，并保持面板激活', async () => {
+        const wrapper = mountSheet();
+        openCommentSheet({ targetType: 'can', targetId: 12, scopes: SCOPES });
+        await wrapper.vm.$nextTick();
+
+        wrapper.vm.draft = '写到一半';
+        wrapper.vm.replyTarget = { parentId: 1, replyToId: 2, nickname: '某人' };
+
+        const chips = wrapper.findAll('.comment-sheet__scope');
+        await chips.at(1).trigger('tap');
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.vm.targetType).toBe('nameplate');
+        expect(wrapper.vm.targetId).toBe(21);
+        expect(wrapper.vm.activeScopeIndex).toBe(1);
+        expect(wrapper.vm.draft).toBe('');
+        expect(wrapper.vm.replyTarget).toBeNull();
+        expect(wrapper.vm.active).toBe(true);
+        /* scroll-view :key 变化 → 评论线程以新目标重挂 */
+        const thread = wrapper.find('.thread-stub');
+        expect(thread.attributes('data-type')).toBe('nameplate');
+        expect(thread.attributes('data-id')).toBe('21');
+
+        wrapper.unmount();
+      });
+
+      it('关闭过渡结束后清空 scopes 与高亮', async () => {
+        vi.useFakeTimers();
+        const wrapper = mountSheet();
+        openCommentSheet({ targetType: 'can', targetId: 12, scopes: SCOPES });
+        await wrapper.vm.$nextTick();
+        expect(wrapper.vm.scopes).not.toBeNull();
+
+        wrapper.vm.close();
+        vi.advanceTimersByTime(300);
+        expect(wrapper.vm.scopes).toBeNull();
+        expect(wrapper.vm.activeScopeIndex).toBe(0);
+
+        wrapper.unmount();
+        vi.useRealTimers();
+      });
+    });
+  });
+
+  describe('多宿主注册（页面栈最后注册者胜）', () => {
+    function fakeHost(name) {
+      return { name, open: vi.fn(), close: vi.fn(), isActive: vi.fn(() => false) };
+    }
+
+    it('后注册宿主接管 openCommentSheet，注销后回退前一宿主', () => {
+      const home = fakeHost('home');
+      const canDetail = fakeHost('can-detail');
+      registerCommentSheetHost(home);
+      registerCommentSheetHost(canDetail);
+
+      openCommentSheet({ targetType: 'nameplate', targetId: 7 });
+      expect(canDetail.open).toHaveBeenCalledWith(expect.objectContaining({
+        targetType: 'nameplate',
+        targetId: 7,
+      }));
+
+      unregisterCommentSheetHost(canDetail);
+      openCommentSheet({ targetType: 'can', targetId: 9 });
+      expect(home.open).toHaveBeenCalledWith(expect.objectContaining({
+        targetType: 'can',
+        targetId: 9,
+      }));
+
+      unregisterCommentSheetHost(home);
     });
   });
 });

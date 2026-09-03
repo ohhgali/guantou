@@ -29,6 +29,35 @@
         >
           <view class="comment-sheet__grip-bar" />
         </view>
+        <!-- 面板内多目标切换（如罐头详情页：录音 / 各张铭牌）；单目标调用不渲染此条 -->
+        <scroll-view
+          v-if="hasScopes"
+          scroll-x
+          class="comment-sheet__scopes"
+          :show-scrollbar="false"
+        >
+          <view class="comment-sheet__scopes-row">
+            <view
+              v-for="(scope, index) in scopes"
+              :key="`${scope.type}-${scope.id}`"
+              class="comment-sheet__scope"
+              :class="{ 'comment-sheet__scope--active': index === activeScopeIndex }"
+              role="tab"
+              :aria-selected="index === activeScopeIndex ? 'true' : null"
+              @tap="switchScope(index)"
+            >
+              <text class="comment-sheet__scope-text">
+                {{ scope.label || scope.type }}
+              </text>
+              <text
+                v-if="scope.count !== undefined && scope.count !== null"
+                class="comment-sheet__scope-count"
+              >
+                {{ scope.count }}
+              </text>
+            </view>
+          </view>
+        </scroll-view>
         <!-- key 随目标切换重挂载，归零滚动位置（#257） -->
         <scroll-view
           :key="`${targetType}-${targetId}`"
@@ -115,6 +144,9 @@ export default {
       submitting: false,
       replyTarget: null,
       lastSubmitAt: 0,
+      /* 面板内可切换的多目标（length<2 时置 null 走单目标旧行为） */
+      scopes: null,
+      activeScopeIndex: 0,
     };
   },
   computed: {
@@ -132,6 +164,9 @@ export default {
       }
       return {};
     },
+    hasScopes() {
+      return Array.isArray(this.scopes) && this.scopes.length >= 2;
+    },
   },
   watch: {
     active(value) {
@@ -147,7 +182,19 @@ export default {
     if (this.closeTimer) clearTimeout(this.closeTimer);
   },
   methods: {
-    open({ targetType, targetId, theme = 'default' }) {
+    normalizeScopes(scopes) {
+      /* 只接受至少 2 个目标的数组；否则按无 scopes（单目标）处理 */
+      if (!Array.isArray(scopes) || scopes.length < 2) return null;
+      return scopes.map((scope) => ({
+        type: scope.type,
+        id: scope.id,
+        label: String(scope.label || ''),
+        count: scope.count === undefined ? null : Number(scope.count),
+      }));
+    },
+    open({
+      targetType, targetId, theme = 'default', scopes = null,
+    }) {
       if (this.closeTimer) {
         clearTimeout(this.closeTimer);
         this.closeTimer = null;
@@ -158,10 +205,44 @@ export default {
       this.mode = 'half';
       this.draft = '';
       this.replyTarget = null;
+      this.scopes = this.normalizeScopes(scopes);
+      if (this.scopes) {
+        const matched = this.scopes.findIndex(
+          (scope) => scope.type === targetType && String(scope.id) === String(targetId),
+        );
+        // 初始目标不在 scopes 里时补在最前并高亮，保证讨论对象可见。
+        if (matched < 0) {
+          this.scopes.unshift({
+            type: targetType, id: targetId, label: '', count: null,
+          });
+          this.activeScopeIndex = 0;
+        } else {
+          this.activeScopeIndex = matched;
+        }
+      } else {
+        this.activeScopeIndex = 0;
+      }
       // 先挂载内容，再触发滑入过渡，保证内容在面板出现前已就绪。
       this.$nextTick(() => {
         this.active = true;
       });
+    },
+    /* 面板内切目标：改 targetType/targetId → scroll-view :key 变化重挂 CommentThread
+     * （滚动归零、线程重拉），清草稿/回复与防连点窗口 */
+    switchScope(index) {
+      if (
+        !this.scopes
+        || index === this.activeScopeIndex
+        || index < 0
+        || index >= this.scopes.length
+      ) return;
+      this.activeScopeIndex = index;
+      const scope = this.scopes[index];
+      this.targetType = scope.type;
+      this.targetId = scope.id;
+      this.draft = '';
+      this.replyTarget = null;
+      this.lastSubmitAt = 0;
     },
     close() {
       if (!this.active) return;
@@ -172,6 +253,8 @@ export default {
         this.targetId = null;
         this.targetType = null;
         this.mode = 'half';
+        this.scopes = null;
+        this.activeScopeIndex = 0;
       }, CLOSE_MS);
     },
     /* 返回键拦截（#255）：面板激活时由 pages/index.vue 的 onBackPress 调用 */
@@ -355,6 +438,55 @@ export default {
   padding: 0 24rpx 24rpx;
   box-sizing: border-box;
   overscroll-behavior: contain;
+}
+
+/* 面板内多目标切换条：横向滚动的 chip 行，半屏/全屏都显示 */
+.comment-sheet__scopes {
+  flex: 0 0 auto;
+  width: 100%;
+  padding: 0 24rpx 10rpx;
+  box-sizing: border-box;
+  border-bottom: 1rpx solid var(--border-color);
+  background: var(--surface-color);
+}
+
+.comment-sheet__scopes-row {
+  display: flex;
+  gap: 12rpx;
+  min-width: max-content;
+}
+
+.comment-sheet__scope {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: 0 0 auto;
+  padding: 8rpx 20rpx;
+  border-radius: var(--radius-pill);
+  border: 1rpx solid var(--border-color);
+  background: var(--surface-subtle-color);
+  color: var(--text-secondary-color);
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.comment-sheet__scope--active {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: var(--surface-color);
+  font-weight: 800;
+}
+
+.comment-sheet__scope-text {
+  max-width: 220rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comment-sheet__scope-count {
+  opacity: 0.85;
+  font-size: 20rpx;
 }
 
 /* 底部固定发表评论/回复框：横向输入 + 小发送键，占位小 */
