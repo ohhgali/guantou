@@ -45,7 +45,7 @@ describe('PlateStack (流上 3D 堆叠铭牌区)', () => {
     const wrapper = mountStack();
 
     expect(wrapper.text()).toContain('还没有铭牌');
-    expect(wrapper.findAll('.plate-stack__edge')).toHaveLength(0);
+    expect(wrapper.findAll('.plate-stack__sheet')).toHaveLength(0);
     expect(wrapper.find('.plate-stack__more').exists()).toBe(false);
   });
 
@@ -56,7 +56,7 @@ describe('PlateStack (流上 3D 堆叠铭牌区)', () => {
     });
 
     expect(wrapper.findAll('.row-stub')).toHaveLength(1);
-    expect(wrapper.findAll('.plate-stack__edge')).toHaveLength(0);
+    expect(wrapper.findAll('.plate-stack__sheet')).toHaveLength(0);
   });
 
   it('顶层 NameplateVoteRow 收到 suppressDetailTap，body 点按冒泡为 open-can', async () => {
@@ -73,16 +73,17 @@ describe('PlateStack (流上 3D 堆叠铭牌区)', () => {
     expect(wrapper.emitted('open-can')).toHaveLength(1);
   });
 
-  it('副铭牌渲染为纯视觉厚度带（n-1），不渲染任何可交互操作条', () => {
+  it('副铭牌渲染为纯视觉牌面（n-1 向右上偏移），顶层操作条只出现一次', () => {
     const wrapper = mountStack({
       plates: [plate(1, { is_primary: true }), plate(2), plate(3), plate(4)],
       total: 4,
     });
 
-    const edges = wrapper.findAll('.plate-stack__edge');
-    expect(edges).toHaveLength(3);
-    /* 厚度带是纯视觉层：其内部不出现顶层卡的操作条/交互内容 */
-    expect(wrapper.find('.plate-stack__pad .row-stub').exists()).toBe(false);
+    const sheets = wrapper.findAll('.plate-stack__sheet');
+    expect(sheets).toHaveLength(3);
+    /* 牌面是纯视觉层：交互卡（NameplateVoteRow）只在顶层 face 出现一次，牌面自身不带操作条 */
+    expect(wrapper.findAll('.row-stub')).toHaveLength(1);
+    expect(wrapper.findAll('.plate-stack__sheet .row-stub')).toHaveLength(0);
   });
 
   it('总数超过展示上限时显示 +N 入口并可点开罐头', async () => {

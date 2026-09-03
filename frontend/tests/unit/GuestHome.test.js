@@ -213,7 +213,7 @@ describe('immersive home (Issue #192)', () => {
     expect(rows).toHaveLength(1);
     expect(rows.at(0).props('compact')).toBe(false);
     expect(rows.at(0).props('suppressDetailTap')).toBe(true);
-    expect(wrapper.findAll('.plate-stack__edge')).toHaveLength(2);
+    expect(wrapper.findAll('.plate-stack__sheet')).toHaveLength(2);
     expect(wrapper.text()).toContain('巴适');
     expect(wrapper.text()).not.toContain('巴适得板');
     /* 展示 3 张、共 5 张 → 剩余 2 张收进 +N 入口 */
@@ -254,7 +254,7 @@ describe('immersive home (Issue #192)', () => {
 
     /* 堆叠至多 5 张（4 层厚度带），第 6 张进 +N */
     expect(wrapper.findAllComponents(NameplateVoteRow)).toHaveLength(1);
-    expect(wrapper.findAll('.plate-stack__edge')).toHaveLength(4);
+    expect(wrapper.findAll('.plate-stack__sheet')).toHaveLength(4);
     expect(wrapper.text()).toContain('主牌');
     expect(wrapper.text()).not.toContain('副五');
     expect(wrapper.text()).toContain('+ 1 张铭牌');

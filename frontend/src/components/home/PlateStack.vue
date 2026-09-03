@@ -7,32 +7,31 @@
       这段乡音还没有铭牌。
     </view>
 
-    <!-- 顶层主铭牌：可交互（支持/评论/立论），body 点按上抛 open-can 进罐头详情 -->
+    <!-- 主铭牌在左下角；副铭牌作为整张同尺寸牌面绝对定位在主铭牌上，
+         向右上角逐张偏移露出边角，形成扇形牌叠观感（纯视觉，不可点按）。
+         deck 顶部按层数预留上升空间，露角不溢出到上方播放区 -->
     <view
       v-else
-      class="plate-stack__face"
+      class="plate-stack__deck"
+      :style="{ paddingTop: `${topPad}rpx` }"
     >
-      <NameplateVoteRow
-        :nameplate="plates[0]"
-        :can-id="canId"
-        suppress-detail-tap
-        @body-tap="$emit('open-can')"
-      />
-    </view>
-
-    <!-- 底层副铭牌：纯视觉层叠厚度（至多 5 张 → 4 层），不可点按，只承载“多张”的纵深观感。
-         真实内容进罐头详情查看。 -->
-    <view
-      v-if="plates.length > 1"
-      class="plate-stack__pad"
-      aria-hidden="true"
-    >
-      <view
-        v-for="(plate, index) in plates.slice(1)"
-        :key="plate.id"
-        class="plate-stack__edge"
-        :class="`plate-stack__edge--${index + 1}`"
-      />
+      <view class="plate-stack__stage">
+        <view
+          v-for="(plate, index) in plates.slice(1)"
+          :key="plate.id"
+          class="plate-stack__sheet"
+          :class="`plate-stack__sheet--${index + 1}`"
+          aria-hidden="true"
+        />
+        <view class="plate-stack__face">
+          <NameplateVoteRow
+            :nameplate="plates[0]"
+            :can-id="canId"
+            suppress-detail-tap
+            @body-tap="$emit('open-can')"
+          />
+        </view>
+      </view>
     </view>
 
     <!-- 超过 5 张（后端已封顶预览）的剩余计数入口 -->
@@ -75,6 +74,10 @@ export default {
     extraCount() {
       return Math.max(0, Number(this.total || 0) - this.plates.length);
     },
+    /* 副牌向右上每层升 14rpx，deck 顶部预留同样高度，露角不溢出到播放区 */
+    topPad() {
+      return Math.max(0, this.plates.length - 1) * 14;
+    },
   },
 };
 </script>
@@ -98,41 +101,51 @@ export default {
   z-index: 2;
 }
 
-/* 副铭牌厚度带：多行叠在顶层卡下方（负 margin 上收入卡底），逐层内收模拟纸牌纵深 */
-.plate-stack__pad {
-  position: relative;
-  z-index: 1;
-  margin: -6rpx 0 0;
-  padding: 0;
+/* 牌叠底盒：顶部按层数预留上升空间（inline paddingTop），内层舞台承载牌面 */
+.plate-stack__deck {
+  box-sizing: border-box;
 }
 
-.plate-stack__edge {
-  height: 14rpx;
-  margin: -2rpx auto 0;
+/* 内层舞台：高度由在流的顶层主铭牌决定，副铭牌在此坐标系内向右上偏移 */
+.plate-stack__stage {
+  position: relative;
+}
+
+/* 副铭牌牌面：与主铭牌同尺寸同圆角，绝对定位在主铭牌上向右上偏移露角 */
+.plate-stack__sheet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
   border: 1rpx solid var(--immersive-border-color);
-  border-top: none;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  border-radius: var(--radius-lg);
   background: linear-gradient(
     180deg,
     var(--immersive-surface-color),
     var(--immersive-surface-strong-color)
   );
+  box-shadow: 0 6rpx 16rpx rgba(0, 0, 0, 0.18);
+  opacity: 0.9;
+  pointer-events: none;
 }
 
-.plate-stack__edge--1 {
-  width: calc(100% - 10rpx);
+/* 第 k 张副牌向右上偏移 k 步（右 +12rpx、上 -14rpx/层），露出上缘与右缘 */
+.plate-stack__sheet--1 {
+  transform: translate(12rpx, -14rpx);
 }
 
-.plate-stack__edge--2 {
-  width: calc(100% - 22rpx);
+.plate-stack__sheet--2 {
+  transform: translate(24rpx, -28rpx);
 }
 
-.plate-stack__edge--3 {
-  width: calc(100% - 34rpx);
+.plate-stack__sheet--3 {
+  transform: translate(36rpx, -42rpx);
 }
 
-.plate-stack__edge--4 {
-  width: calc(100% - 46rpx);
+.plate-stack__sheet--4 {
+  transform: translate(48rpx, -56rpx);
 }
 
 .plate-stack__more {
