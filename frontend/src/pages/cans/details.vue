@@ -1,5 +1,10 @@
 <template>
-  <PageShell title="罐头详情">
+  <PageShell
+    title="罐头详情"
+    :scroll-locked="sheetActive"
+  >
+    <!-- 评论半屏面板宿主：面板激活时锁定整页滚动 -->
+    <CommentSheet @active-change="onSheetActiveChange" />
     <view
       v-if="loadError && !can"
       class="load-error"
@@ -25,6 +30,18 @@
         </view>
         <view class="can-hero__meta">
           {{ dialectText }} · {{ durationText }} · {{ formatTime(can.created_at) }}
+        </view>
+        <view
+          v-if="heroReadingText"
+          class="can-hero__reading"
+        >
+          {{ heroReadingText }}
+        </view>
+        <view
+          v-if="heroDefinition"
+          class="can-hero__definition"
+        >
+          {{ heroDefinition }}
         </view>
         <view
           v-if="can.recorder"
@@ -81,53 +98,51 @@
         </view>
       </view>
 
-      <SectionBlock title="录音档案">
-        <t-cell
-          title="方言提示"
-          :note="can.submitted_dialect?.qualified_code || '未记录'"
-        />
-        <t-cell
-          title="当前状态"
-          :note="statusText(can.status)"
-        />
-        <t-cell
-          title="来源说明"
-          :note="can.source_note || '未填写'"
-        />
+      <SectionBlock :title="`大家怎么说 · ${can.comment_count || 0}`">
+        <view class="section-intro">
+          录音级讨论：聊聊这段乡音本身、录制现场与说话人信息。
+        </view>
         <view
-          v-if="transitionActions.length"
-          class="review-box"
+          v-if="(can.recent_comments || []).length"
+          class="recent-comment-list"
         >
-          <t-textarea
-            v-model="transitionReason"
-            maxlength="300"
-            placeholder="流转理由（驳回时建议填写）"
-            autosize
-          />
-          <view class="review-actions">
-            <BaseButton
-              v-for="item in transitionActions"
-              :key="item.action"
-              size="small"
-              :variant="item.action === 'reject' ? 'danger' : 'primary'"
-              :text="item.label"
-              :loading="transitionBusy === item.action"
-              @click="runTransition(item.action)"
-            />
+          <view
+            v-for="comment in can.recent_comments"
+            :key="comment.id"
+            class="recent-comment"
+          >
+            <text class="recent-comment__author">
+              {{ comment.author?.nickname || comment.author?.username || '匿名' }}
+            </text>
+            <text class="recent-comment__text">
+              {{ comment.content }}
+            </text>
           </view>
         </view>
+        <view
+          v-else
+          class="section-intro"
+        >
+          还没有讨论，来聊聊这段乡音吧。
+        </view>
+        <BaseButton
+          block
+          variant="light"
+          :text="(can.recent_comments || []).length ? '查看全部评论' : '说点什么'"
+          @click="openCanSheet"
+        />
       </SectionBlock>
 
       <SectionBlock title="这段录音的铭牌">
         <view class="section-intro">
-          写法、释义和读音变化属于铭牌。点开铭牌可查看完整来源与讨论。
+          写法、释义和读音变化属于铭牌。点开铭牌查看完整来源与讨论。
         </view>
         <NameplateCard
           v-for="plate in activeNameplates"
           :key="plate.id"
           :plate="plate"
           @open="openNameplate"
-          @comments="openNameplateComments"
+          @comments="openNameplateSheet"
           @debate="openDebate"
           @support="support"
           @unsupport="unsupport"
@@ -141,18 +156,6 @@
           variant="ghost"
           :text="activeNameplates.length ? '发表一张新铭牌' : '补上第一张铭牌'"
           @click="createPlate"
-        />
-      </SectionBlock>
-
-      <SectionBlock :title="`录音评论 · ${can.comment_count || 0}`">
-        <view class="section-intro">
-          这里讨论录音与录制信息；关于具体写法和读音，请进入对应铭牌评论区。
-        </view>
-        <BaseButton
-          block
-          variant="light"
-          text="查看罐头评论"
-          @click="openCanComments"
         />
       </SectionBlock>
 
@@ -178,6 +181,50 @@
           </view>
         </view>
       </SectionBlock>
+
+      <!-- 录音元数据与状态流转：低频信息折叠收纳，避免首屏平铺 -->
+      <SectionBlock
+        title="录音档案与状态"
+        :action-text="showArchive ? '收起' : '展开'"
+        @action="showArchive = !showArchive"
+      >
+        <template v-if="showArchive">
+          <t-cell
+            title="方言提示"
+            :note="can.submitted_dialect?.qualified_code || '未记录'"
+          />
+          <t-cell
+            title="当前状态"
+            :note="statusText(can.status)"
+          />
+          <t-cell
+            title="来源说明"
+            :note="can.source_note || '未填写'"
+          />
+          <view
+            v-if="transitionActions.length"
+            class="review-box"
+          >
+            <t-textarea
+              v-model="transitionReason"
+              maxlength="300"
+              placeholder="流转理由（驳回时建议填写）"
+              autosize
+            />
+            <view class="review-actions">
+              <BaseButton
+                v-for="item in transitionActions"
+                :key="item.action"
+                size="small"
+                :variant="item.action === 'reject' ? 'danger' : 'primary'"
+                :text="item.label"
+                :loading="transitionBusy === item.action"
+                @click="runTransition(item.action)"
+              />
+            </view>
+          </view>
+        </template>
+      </SectionBlock>
     </template>
     <BaseLoading
       v-else
@@ -191,6 +238,7 @@ import TButton from '@tdesign/uniapp/button/button.vue';
 import TCell from '@tdesign/uniapp/cell/cell.vue';
 import BaseButton from '@/components/BaseButton.vue';
 import BaseLoading from '@/components/BaseLoading.vue';
+import CommentSheet from '@/components/CommentSheet.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import NameplateCard from '@/components/NameplateCard.vue';
 import PageShell from '@/components/PageShell.vue';
@@ -202,11 +250,11 @@ import { likeCan, unlikeCan } from '@/services/canSocial';
 import { requireAuth } from '@/services/authGuard';
 import { openCanPost, startUseSame } from '@/services/canPostJourney';
 import {
-  goCanComments,
-  goCreateNameplate,
-  goNameplateComments,
-  goNameplateDetail,
-} from '@/services/navigation';
+  closeCommentSheet,
+  isCommentSheetActive,
+  openCommentSheet,
+} from '@/services/commentSheet';
+import { goCreateNameplate, goNameplateDetail } from '@/services/navigation';
 import { playAudio } from '@/utils/audio';
 import { toUserPage } from '@/routers/user';
 import { canSharePayload, shareCanOnWeb } from '@/utils/shareCan';
@@ -244,10 +292,38 @@ function currentSessionUser() {
   };
 }
 
+/* 评论面板的可切换讨论对象：录音本身在前，随后是各张 active 铭牌。
+ * 面板打开时默认高亮初始 target；点其它 chip 切到对应铭牌讨论。 */
+export function buildCommentScopes(can) {
+  if (!can) return null;
+  const scopes = [{
+    type: 'can',
+    id: can.id,
+    label: '本段录音',
+    count: can.comment_count === undefined ? null : Number(can.comment_count || 0),
+  }];
+  (can.nameplates || [])
+    .filter((plate) => plate.status === 'active')
+    .sort((left, right) => (
+      Number(right.is_primary) - Number(left.is_primary)
+      || (right.weight || 0) - (left.weight || 0)
+    ))
+    .forEach((plate) => {
+      scopes.push({
+        type: 'nameplate',
+        id: plate.id,
+        label: plate.display_text || '铭牌',
+        count: plate.comment_count === undefined ? null : Number(plate.comment_count || 0),
+      });
+    });
+  return scopes;
+}
+
 export default {
   components: {
     BaseButton,
     BaseLoading,
+    CommentSheet,
     EmptyState,
     NameplateCard,
     PageShell,
@@ -265,6 +341,9 @@ export default {
       posts: [],
       transitionBusy: '',
       transitionReason: '',
+      sheetActive: false,
+      sheetOpenedOnce: false,
+      showArchive: false,
     };
   },
   computed: {
@@ -283,6 +362,22 @@ export default {
       return this.activeNameplates[0]?.dialect?.qualified_code
         || this.can?.submitted_dialect?.qualified_code || '未标方言点';
     },
+    /* 主铭牌读音/释义摘要，用于 hero 主卡信息分层 */
+    heroReadingText() {
+      const plate = this.activeNameplates[0];
+      const pronunciation = plate?.pronunciation || {};
+      const base = pronunciation.base_romanization || '';
+      const surface = pronunciation.surface_romanization
+        || plate?.pronunciation_text || pronunciation.ipa || '';
+      if (base && surface && base !== surface) return `${base} → ${surface}`;
+      return surface || base || '';
+    },
+    heroDefinition() {
+      return this.activeNameplates[0]?.definition || '';
+    },
+    commentScopes() {
+      return buildCommentScopes(this.can);
+    },
     durationText() {
       const seconds = Math.round(Number(this.can?.duration_ms || 0) / 1000);
       return seconds ? `${seconds} 秒` : '时长未记录';
@@ -294,6 +389,18 @@ export default {
     await this.refresh();
   },
   onShow() { this.currentUser = currentSessionUser(); },
+  onHide() {
+    // 评论面板不随页面保留：离开即收起，避免返回时陈旧目标仍打开。
+    closeCommentSheet();
+  },
+  onBackPress() {
+    // 面板打开时返回键先关闭面板而非退出页面。
+    if (isCommentSheetActive()) {
+      closeCommentSheet();
+      return true;
+    }
+    return false;
+  },
   onShareAppMessage() { return canSharePayload(this.can || { id: this.id }); },
   methods: {
     playAudio,
@@ -343,9 +450,32 @@ export default {
     },
     useSame() { startUseSame(this.id, { page: 'can_detail' }); },
     toPost(postId) { openCanPost(postId); },
-    openCanComments() { goCanComments(this.id); },
+    openCanSheet() {
+      this.openCommentsFor({ type: 'can', id: this.id });
+    },
+    openNameplateSheet(id) {
+      this.openCommentsFor({ type: 'nameplate', id });
+    },
+    /* 评论一律走可拖动半屏面板：scopes 让「本段录音 / 各张铭牌」面板内可切换 */
+    openCommentsFor({ type, id }) {
+      openCommentSheet({
+        targetType: type,
+        targetId: id,
+        theme: 'default',
+        scopes: this.commentScopes,
+      });
+    },
+    onSheetActiveChange(active) {
+      this.sheetActive = active;
+      if (active) {
+        this.sheetOpenedOnce = true;
+      } else if (this.sheetOpenedOnce) {
+        // 面板关闭后轻量刷新，同步「大家怎么说」摘要与评论计数
+        this.sheetOpenedOnce = false;
+        this.refresh();
+      }
+    },
     openNameplate(id) { goNameplateDetail(id); },
-    openNameplateComments(id) { goNameplateComments(id); },
     openDebate(plate) {
       if (!requireAuth('nameplate_create', { canId: this.id, nameplateId: plate.id })) return;
       goCreateNameplate(this.id, plate.id);
@@ -420,6 +550,18 @@ export default {
   color: var(--on-immersive-muted-color);
   font-size: 22rpx;
 }
+.can-hero__reading {
+  margin-top: 14rpx;
+  color: var(--immersive-accent-color);
+  font-size: 30rpx;
+  letter-spacing: 3rpx;
+}
+.can-hero__definition {
+  margin-top: 10rpx;
+  color: var(--on-immersive-muted-color);
+  font-size: 24rpx;
+  line-height: 1.6;
+}
 .recorder {
   display: flex;
   align-items: center;
@@ -458,4 +600,33 @@ export default {
 .post-row__author { color: var(--accent-color); font-size: 22rpx; font-weight: 900; }
 .post-row__text { margin-top: 8rpx; color: var(--text-color); font-size: 27rpx; line-height: 1.55; }
 .post-row__time { margin-top: 8rpx; color: var(--muted-color); font-size: 20rpx; }
+
+/* 「大家怎么说」最近评论摘要 */
+.recent-comment-list {
+  display: flex;
+  flex-direction: column;
+}
+.recent-comment {
+  display: flex;
+  gap: 16rpx;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid var(--border-color);
+}
+.recent-comment__author {
+  flex: 0 0 auto;
+  color: var(--accent-color);
+  font-size: 22rpx;
+  font-weight: 900;
+}
+.recent-comment__text {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-color);
+  font-size: 25rpx;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 </style>
