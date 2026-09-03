@@ -33,9 +33,9 @@
     <slot name="before" />
     <scroll-view
       v-if="scroll"
-      scroll-y
+      :scroll-y="!scrollLocked"
       class="shell-content shell-scroll"
-      :class="contentClass"
+      :class="[{ 'shell-scroll--locked': scrollLocked }, contentClass]"
       @scrolltolower="$emit('scrolltolower')"
     >
       <slot />
@@ -76,6 +76,11 @@ export default {
     scroll: {
       type: Boolean,
       default: true,
+    },
+    /* 面板/浮层打开时锁定整页滚动，禁止滚轮/触摸带动底层内容 */
+    scrollLocked: {
+      type: Boolean,
+      default: false,
     },
     contentClass: {
       type: [String, Array, Object],
@@ -165,5 +170,10 @@ export default {
 
 .shell-scroll {
   height: calc(100vh - 96rpx);
+}
+
+/* 面板打开时锁定整页滚动：禁触与禁滚轮（scroll-y=false 在 H5 等价 overflow:hidden） */
+.shell-scroll--locked {
+  overflow: hidden;
 }
 </style>

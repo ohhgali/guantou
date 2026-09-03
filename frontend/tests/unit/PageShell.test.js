@@ -70,4 +70,29 @@ describe('PageShell', () => {
     wrapper.unmount();
     expect(uni.$off).toHaveBeenCalled();
   });
+
+  it('locks the page scroll while a sheet is open, then restores it', async () => {
+    const scrollStub = {
+      name: 'ScrollView',
+      props: ['scrollY'],
+      template: '<div class="shell-scroll" :data-scroll-y="String(scrollY)"><slot /></div>',
+    };
+    const wrapper = mount(PageShell, {
+      props: { title: '详情', scrollLocked: false },
+      global: { stubs: { 'scroll-view': scrollStub } },
+      slots: { default: '<div>content</div>' },
+    });
+
+    const scroller = () => wrapper.find('.shell-scroll');
+    expect(scroller().attributes('data-scroll-y')).toBe('true');
+    expect(scroller().classes()).not.toContain('shell-scroll--locked');
+
+    await wrapper.setProps({ scrollLocked: true });
+    expect(scroller().attributes('data-scroll-y')).toBe('false');
+    expect(scroller().classes()).toContain('shell-scroll--locked');
+
+    await wrapper.setProps({ scrollLocked: false });
+    expect(scroller().attributes('data-scroll-y')).toBe('true');
+    expect(scroller().classes()).not.toContain('shell-scroll--locked');
+  });
 });
