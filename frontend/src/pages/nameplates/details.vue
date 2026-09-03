@@ -1,5 +1,10 @@
 <template>
-  <PageShell title="铭牌详情">
+  <PageShell
+    title="铭牌详情"
+    :scroll-locked="sheetActive"
+  >
+    <!-- 评论半屏面板宿主：面板激活时锁定整页滚动 -->
+    <CommentSheet @active-change="onSheetActiveChange" />
     <view
       v-if="nameplate"
       class="nameplate-page"
@@ -7,102 +12,107 @@
       <view class="nameplate-hero">
         <view class="nameplate-hero__kicker">
           {{ nameplate.is_primary ? '主铭牌' : '社区铭牌' }} · {{ dialectText }}
+          <text
+            v-if="evidencePill"
+            class="nameplate-hero__evidence"
+          >
+            {{ evidencePill }}
+          </text>
         </view>
         <view class="nameplate-hero__writing">
           {{ nameplate.display_text }}
         </view>
-        <view
-          v-if="readingText"
-          class="nameplate-hero__reading"
-        >
-          {{ readingText }}
-        </view>
         <view class="nameplate-hero__definition">
           {{ nameplate.definition || '这张铭牌还没有补充释义。' }}
         </view>
+
+        <!-- 归属当前铭牌的两个操作：支持 / 评论；「立论」另置于依据区 -->
+        <view class="nameplate-hero__actions">
+          <BaseButton
+            class="support-action"
+            :text="`${supported ? '已支持' : '支持'} ${supportCount}`"
+            :loading="supportBusy"
+            @click="toggleSupport"
+          />
+          <BaseButton
+            class="comments-action"
+            variant="light"
+            :text="`评论 ${nameplate.comment_count || 0}`"
+            @click="openComments"
+          />
+        </view>
       </view>
 
+      <!-- 读音记录：把“组词后读音变化”用 变调前 → 变调后 箭头流可视化 -->
       <view class="nameplate-sheet">
         <view class="nameplate-sheet__title">
-          读音记录
+          读音变化
         </view>
-        <t-cell
-          title="来源原样读音"
-          :note="nameplate.pronunciation_text || '未记录'"
-        />
-        <t-cell
-          title="变化前罗马字"
-          :note="nameplate.pronunciation?.base_romanization || '未记录'"
-        />
-        <t-cell
-          title="变化后罗马字"
-          :note="nameplate.pronunciation?.surface_romanization || '未记录'"
-        />
-        <t-cell
-          title="国际音标"
-          :note="nameplate.pronunciation?.ipa || '未记录'"
+        <ReadingSandhiFlow
+          :pronunciation="nameplate.pronunciation || null"
+          :pronunciation-text="nameplate.pronunciation_text || ''"
         />
       </view>
 
+      <!-- 所属录音：铭牌页内联播放，不必跳到罐头详情 -->
+      <view class="nameplate-sheet">
+        <view class="nameplate-sheet__title">
+          所属录音
+        </view>
+        <InlinePlayer
+          v-if="canAudioUrl"
+          :src="canAudioUrl"
+          label="播放这张铭牌所解释的乡音"
+        />
+        <view
+          v-else
+          class="nameplate-sheet__note"
+        >
+          这段铭牌尚未关联可播放的录音。
+        </view>
+        <view
+          v-if="nameplate.can"
+          class="can-link"
+          @tap="openCan"
+        >
+          <view class="can-link__value">
+            查看录音罐头详情 ›
+          </view>
+        </view>
+      </view>
+
+      <!-- 立论依据：叙述式来源卡 + 独立的「立论」动作（提竞争铭牌，≠支持当前铭牌） -->
       <view class="nameplate-sheet">
         <view class="nameplate-sheet__title">
           立论依据
         </view>
-        <t-cell
-          title="方言点"
-          :note="dialectText"
-        />
-        <t-cell
-          title="证据等级"
-          :note="evidenceText"
-        />
-        <t-cell
-          title="来源类型"
-          :note="sourceTypeText"
-        />
-        <t-cell
-          v-if="sourceTitle"
-          title="来源"
-          :note="sourceTitle"
-        />
-        <view
-          v-if="nameplate.source?.note"
-          class="nameplate-sheet__note"
-        >
-          {{ nameplate.source.note }}
+        <view class="evidence">
+          <text class="evidence__lead">
+            {{ evidenceLead }}
+          </text>
+          <text
+            v-if="sourceTitle"
+            class="evidence__source"
+          >
+            《{{ sourceTitle }}》
+          </text>
+          <text
+            v-if="nameplate.source?.note"
+            class="evidence__note"
+          >
+            {{ nameplate.source.note }}
+          </text>
         </view>
-      </view>
-
-      <view class="nameplate-actions">
-        <BaseButton
-          class="support-action"
-          :text="`${supported ? '已支持' : '支持'} ${supportCount}`"
-          :loading="supportBusy"
-          @click="toggleSupport"
-        />
-        <BaseButton
-          class="comments-action"
-          variant="light"
-          :text="`评论 ${nameplate.comment_count || 0}`"
-          @click="openComments"
-        />
-        <BaseButton
-          class="debate-action"
-          variant="danger-ghost"
-          text="立论"
-          @click="openDebate"
-        />
-      </view>
-
-      <view
-        class="can-link"
-        @tap="openCan"
-      >
-        <view class="can-link__label">
-          这张铭牌所解释的录音
-        </view>
-        <view class="can-link__value">
-          播放罐头并查看录音者信息 ›
+        <view class="evidence__cta">
+          <text class="evidence__cta-copy">
+            不同意这张铭牌的写法或读音？立论是提出一张有依据的竞争铭牌，不修改当前铭牌。
+          </text>
+          <BaseButton
+            class="debate-action"
+            variant="danger-ghost"
+            text="立论"
+            @click="openDebate"
+          />
         </view>
       </view>
     </view>
@@ -114,17 +124,20 @@
 </template>
 
 <script>
-import TCell from '@tdesign/uniapp/cell/cell.vue';
 import BaseButton from '@/components/BaseButton.vue';
 import BaseLoading from '@/components/BaseLoading.vue';
+import CommentSheet from '@/components/CommentSheet.vue';
+import InlinePlayer from '@/components/InlinePlayer.vue';
 import PageShell from '@/components/PageShell.vue';
+import ReadingSandhiFlow from '@/components/ReadingSandhiFlow.vue';
 import { getNameplate, supportNameplate, unsupportNameplate } from '@/services/guantou';
 import { requireAuth } from '@/services/authGuard';
 import {
-  goCanDetail,
-  goCreateNameplate,
-  goNameplateComments,
-} from '@/services/navigation';
+  closeCommentSheet,
+  isCommentSheetActive,
+  openCommentSheet,
+} from '@/services/commentSheet';
+import { goCanDetail, goCreateNameplate } from '@/services/navigation';
 
 const SOURCE_LABELS = {
   creator: '创作者自述',
@@ -144,8 +157,10 @@ export default {
   components: {
     BaseButton,
     BaseLoading,
+    CommentSheet,
+    InlinePlayer,
     PageShell,
-    TCell,
+    ReadingSandhiFlow,
   },
   data() {
     return {
@@ -155,22 +170,24 @@ export default {
       supportCount: 0,
       supportBusy: false,
       resumeAction: '',
+      sheetActive: false,
+      sheetOpenedOnce: false,
     };
   },
   computed: {
     dialectText() {
       return this.nameplate?.dialect?.name || '方言点待补';
     },
-    readingText() {
-      const pronunciation = this.nameplate?.pronunciation || {};
-      const base = pronunciation.base_romanization || '';
-      const surface = pronunciation.surface_romanization
-        || this.nameplate?.pronunciation_text || pronunciation.ipa || '';
-      if (base && surface && base !== surface) return `${base} → ${surface}`;
-      return surface || base;
+    evidencePill() {
+      const level = this.nameplate?.evidence_level;
+      return EVIDENCE_LABELS[level] || '';
     },
     evidenceText() {
       return EVIDENCE_LABELS[this.nameplate?.evidence_level] || '未说明';
+    },
+    evidenceLead() {
+      const source = this.sourceTypeText ? `，来源为 ${this.sourceTypeText}` : '';
+      return `这张铭牌由「${this.evidenceText}」立论${source}。`;
     },
     sourceTypeText() {
       const type = this.nameplate?.source_type || this.nameplate?.source?.type || 'other';
@@ -178,13 +195,28 @@ export default {
     },
     sourceTitle() {
       const source = this.nameplate?.source || {};
-      return source.title || source.attributed_to || source.url || '';
+      return source.title || source.attributed_to || '';
+    },
+    canAudioUrl() {
+      return this.nameplate?.can?.audio_url || '';
     },
   },
   onLoad(options) {
     this.id = Number(options.id);
     this.resumeAction = options.resume || '';
     this.load();
+  },
+  onHide() {
+    // 评论面板不随页面保留：离开即收起。
+    closeCommentSheet();
+  },
+  onBackPress() {
+    // 面板打开时返回键先关闭面板而非退出页面。
+    if (isCommentSheetActive()) {
+      closeCommentSheet();
+      return true;
+    }
+    return false;
   },
   methods: {
     async load() {
@@ -214,9 +246,24 @@ export default {
       }
     },
     openComments() {
-      goNameplateComments(this.id);
+      // 本页评论只讨论这张铭牌：单目标半屏面板（无 scopes 切换条）
+      openCommentSheet({
+        targetType: 'nameplate',
+        targetId: this.id,
+        theme: 'default',
+      });
+    },
+    onSheetActiveChange(active) {
+      this.sheetActive = active;
+      if (active) {
+        this.sheetOpenedOnce = true;
+      } else if (this.sheetOpenedOnce) {
+        this.sheetOpenedOnce = false;
+        this.load();
+      }
     },
     openDebate() {
+      // “立论” = 提出一张有依据的竞争铭牌主张，不代表修订或取代当前铭牌。
       if (!requireAuth('nameplate_create', {
         nameplateId: this.id,
         canId: this.nameplate.can?.id,
@@ -234,7 +281,7 @@ export default {
 .nameplate-page { padding-bottom: 60rpx; }
 .nameplate-hero {
   position: relative;
-  padding: 44rpx 34rpx;
+  padding: 44rpx 34rpx 34rpx;
   border: 1rpx solid var(--border-color);
   border-radius: 8rpx;
   background: var(--surface-color);
@@ -259,6 +306,15 @@ export default {
   font-weight: 800;
   letter-spacing: 3rpx;
 }
+.nameplate-hero__evidence {
+  margin-left: 12rpx;
+  padding: 2rpx 12rpx;
+  border: 1rpx solid var(--accent-color);
+  border-radius: var(--radius-pill);
+  color: var(--accent-color);
+  font-size: 18rpx;
+  letter-spacing: 1rpx;
+}
 .nameplate-hero__writing {
   margin-top: 18rpx;
   color: var(--text-color);
@@ -267,17 +323,17 @@ export default {
   font-weight: 900;
   line-height: 1.2;
 }
-.nameplate-hero__reading {
-  margin-top: 12rpx;
-  color: var(--text-secondary-color);
-  font-size: 30rpx;
-  letter-spacing: 3rpx;
-}
 .nameplate-hero__definition {
   margin-top: 24rpx;
   color: var(--text-secondary-color);
   font-size: 28rpx;
   line-height: 1.7;
+}
+.nameplate-hero__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14rpx;
+  margin-top: 30rpx;
 }
 .nameplate-sheet {
   margin-top: 24rpx;
@@ -287,35 +343,74 @@ export default {
   background: var(--surface-color);
 }
 .nameplate-sheet__title {
-  padding: 22rpx 26rpx 10rpx;
+  padding: 22rpx 26rpx 6rpx;
   color: var(--accent-color);
   font-size: 22rpx;
   font-weight: 900;
   letter-spacing: 3rpx;
 }
 .nameplate-sheet__note {
-  padding: 22rpx 28rpx;
+  padding: 20rpx 26rpx 24rpx;
   color: var(--muted-text-color);
   font-size: 24rpx;
   line-height: 1.6;
 }
-.nameplate-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14rpx;
-  margin-top: 28rpx;
+
+/* ---------- 立论依据（叙述式） ---------- */
+.evidence {
+  padding: 14rpx 26rpx 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
 }
-.can-link {
-  margin-top: 26rpx;
-  padding: 24rpx 28rpx;
-  border-left: 7rpx solid var(--accent-color);
-  background: var(--surface-color);
-}
-.can-link__label { color: var(--muted-text-color); font-size: 21rpx; }
-.can-link__value {
-  margin-top: 8rpx;
+.evidence__lead {
   color: var(--text-color);
-  font-size: 27rpx;
+  font-size: 26rpx;
+  line-height: 1.7;
+}
+.evidence__source {
+  align-self: flex-start;
+  padding: 4rpx 16rpx;
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle-color);
+  color: var(--text-secondary-color);
+  font-size: 23rpx;
+}
+.evidence__note {
+  color: var(--muted-text-color);
+  font-size: 23rpx;
+  line-height: 1.6;
+}
+.evidence__cta {
+  margin-top: 16rpx;
+  padding: 22rpx 26rpx;
+  border-top: 1rpx solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+.evidence__cta-copy {
+  min-width: 0;
+  flex: 1;
+  color: var(--muted-text-color);
+  font-size: 21rpx;
+  line-height: 1.5;
+}
+.debate-action {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+/* ---------- 所属录音 ---------- */
+.can-link {
+  padding: 4rpx 26rpx 22rpx;
+  display: flex;
+  align-items: center;
+}
+.can-link__value {
+  color: var(--accent-color);
+  font-size: 24rpx;
   font-weight: 800;
 }
 </style>
