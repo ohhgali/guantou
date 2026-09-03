@@ -81,28 +81,14 @@
         </view>
       </view>
 
-      <!-- 铭牌区：主铭牌 + 最多 2 张副铭牌（紧凑形态） -->
+      <!-- 铭牌区：3D 堆叠至多 5 张（主铭牌顶层），点主铭牌区 → 打开罐头详情 -->
       <view class="stage-card__plates">
-        <NameplateVoteRow
-          v-for="(plate, index) in platePreviews"
-          :key="plate.id"
-          :nameplate="plate"
+        <PlateStack
+          :plates="platePreviews"
+          :total="nameplateTotal"
           :can-id="can.id"
-          :compact="index > 0"
+          @open-can="openCanDetails"
         />
-        <view
-          v-if="!previews.length"
-          class="stage-card__plates-empty"
-        >
-          这段乡音还没有铭牌。
-        </view>
-        <view
-          v-if="extraCount > 0"
-          class="stage-card__plates-more"
-          @tap="openCanDetails"
-        >
-          + {{ extraCount }} 张铭牌 · 看详情 ›
-        </view>
       </view>
     </template>
 
@@ -120,7 +106,7 @@
 
 <script>
 import AudioWave from '@/components/home/AudioWave.vue';
-import NameplateVoteRow from '@/components/home/NameplateVoteRow.vue';
+import PlateStack from '@/components/home/PlateStack.vue';
 import { getNameplatePreview } from '@/services/homeFeed';
 import { goCanDetail } from '@/services/navigation';
 import {
@@ -141,7 +127,7 @@ export default {
   name: 'CanStageCard',
   components: {
     AudioWave,
-    NameplateVoteRow,
+    PlateStack,
   },
   props: {
     can: {
@@ -181,16 +167,13 @@ export default {
       if (!durationMs) return '未知时长';
       return `${Math.max(1, Math.round(durationMs / 1000))}″`;
     },
-    extraCount() {
-      return Math.max(0, this.nameplateTotal - this.platePreviews.length);
-    },
-    /* 主铭牌排首位，副铭牌随其后，总共最多渲染 3 张 */
+    /* 主铭牌排首位，副铭牌随其后，总共最多渲染 5 张（与后端 preview 上限一致） */
     platePreviews() {
       const previews = this.previews || [];
       if (!previews.length) return [];
       const primary = previews.find((plate) => plate.is_primary) || previews[0];
       const rest = previews.filter((plate) => plate !== primary);
-      return [primary, ...rest].slice(0, 3);
+      return [primary, ...rest].slice(0, 5);
     },
   },
   watch: {
@@ -496,29 +479,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
-}
-
-.stage-card__plates-empty {
-  padding: 20rpx 22rpx;
-  border-radius: var(--radius-md);
-  border: 1rpx dashed var(--immersive-border-color);
-  color: var(--on-immersive-muted-color);
-  font-size: var(--font-size-xs);
-  text-align: center;
-}
-
-/* 全宽收尾入口：与上方铭牌卡同宽，右缘对齐避免锯齿 */
-.stage-card__plates-more {
-  align-self: stretch;
-  padding: 10rpx 22rpx;
-  border-radius: var(--radius-pill);
-  color: var(--immersive-accent-color);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  letter-spacing: 1rpx;
-  background: var(--immersive-surface-color);
-  border: 1rpx solid var(--immersive-border-color);
-  text-align: center;
 }
 
 /* ---------- 非激活占位 ---------- */

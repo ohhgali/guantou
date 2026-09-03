@@ -22,8 +22,9 @@ export function listHomeFeed(tab, page = 1) {
   return listCans({ feed, page, page_size: FEED_PAGE_SIZE });
 }
 
+/* 首页卡片铭牌堆叠上限：后端预览接口已提高到 5，此处兜底截断保持一致。 */
 function normalizedPreviews(list) {
-  return (Array.isArray(list) ? list : []).slice(0, 3);
+  return (Array.isArray(list) ? list : []).slice(0, 5);
 }
 
 /**

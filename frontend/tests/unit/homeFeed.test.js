@@ -40,17 +40,17 @@ describe('homeFeed service', () => {
   });
 
   describe('getNameplatePreview', () => {
-    it('prefers the list-provided previews and trims to 3', async () => {
+    it('prefers the list-provided previews and trims to 5', async () => {
       const can = {
         id: 5,
-        nameplate_previews: [1, 2, 3, 4, 5].map((id) => ({ id })),
-        nameplate_total: 5,
+        nameplate_previews: [1, 2, 3, 4, 5, 6].map((id) => ({ id })),
+        nameplate_total: 6,
       };
 
       const result = await getNameplatePreview(5, can);
 
-      expect(result.previews.map((plate) => plate.id)).toEqual([1, 2, 3]);
-      expect(result.total).toBe(5);
+      expect(result.previews.map((plate) => plate.id)).toEqual([1, 2, 3, 4, 5]);
+      expect(result.total).toBe(6);
       expect(getCan).not.toHaveBeenCalled();
     });
 

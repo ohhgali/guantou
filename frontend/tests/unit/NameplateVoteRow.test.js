@@ -280,4 +280,14 @@ describe('NameplateVoteRow optimistic voting', () => {
       url: '/pages/nameplates/create?can_id=33&reference_id=7',
     });
   });
+
+  it('suppressDetailTap reroutes body taps to body-tap instead of the nameplate page', async () => {
+    const wrapper = mountRow({}, { suppressDetailTap: true });
+
+    await wrapper.find('.plate-card__body').trigger('tap');
+
+    expect(wrapper.emitted('body-tap')).toHaveLength(1);
+    expect(wrapper.emitted('body-tap')[0][0].id).toBe(7);
+    expect(uni.navigateTo).not.toHaveBeenCalled();
+  });
 });

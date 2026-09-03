@@ -102,8 +102,14 @@ export default {
       type: Boolean,
       default: false,
     },
+    /* 压制 body 跳铭牌详情：流上堆叠场景由外层承接点按（如开罐头详情），
+     * body tap 改发 body-tap 事件；支持/评论/立论操作条不受影响 */
+    suppressDetailTap: {
+      type: Boolean,
+      default: false,
+    },
   },
-  emits: ['support', 'unsupport'],
+  emits: ['support', 'unsupport', 'body-tap'],
   data() {
     return {
       supported: Boolean(this.nameplate.supported_by_current_user),
@@ -148,6 +154,10 @@ export default {
   },
   methods: {
     openDetail() {
+      if (this.suppressDetailTap) {
+        this.$emit('body-tap', this.nameplate);
+        return;
+      }
       goNameplateDetail(this.nameplate.id);
     },
     openComments() {

@@ -178,12 +178,13 @@ describe('immersive home (Issue #192)', () => {
     expect(wrapper.find('.home-top-bar-stub').attributes('data-active')).toBe('dialect');
   });
 
-  it('stage card renders the top nameplate previews', async () => {
+  it('stage card renders the primary nameplate as the interactive top with stacked edges beneath', async () => {
     setupUni();
     getNameplatePreview.mockReturnValue({
       previews: [
         { id: 1, is_primary: true, display_text: '巴适', definition: '舒服', support_count: 12, supported_by_current_user: false },
         { id: 2, display_text: '巴适得板', definition: '很舒服', support_count: 8, supported_by_current_user: false },
+        { id: 3, display_text: '安逸', definition: '舒适', support_count: 5, supported_by_current_user: false },
       ],
       total: 5,
     });
@@ -208,24 +209,29 @@ describe('immersive home (Issue #192)', () => {
 
     expect(getNameplatePreview).toHaveBeenCalledWith(11, expect.any(Object));
     const rows = wrapper.findAllComponents(NameplateVoteRow);
-    expect(rows).toHaveLength(2);
+    /* 堆叠后只有顶层主铭牌渲染为可交互卡；副铭牌退化为纯视觉厚度带 */
+    expect(rows).toHaveLength(1);
     expect(rows.at(0).props('compact')).toBe(false);
-    expect(rows.at(1).props('compact')).toBe(true);
+    expect(rows.at(0).props('suppressDetailTap')).toBe(true);
+    expect(wrapper.findAll('.plate-stack__edge')).toHaveLength(2);
     expect(wrapper.text()).toContain('巴适');
-    expect(wrapper.text()).toContain('巴适得板');
-    expect(wrapper.text()).toContain('+ 3 张铭牌');
+    expect(wrapper.text()).not.toContain('巴适得板');
+    /* 展示 3 张、共 5 张 → 剩余 2 张收进 +N 入口 */
+    expect(wrapper.text()).toContain('+ 2 张铭牌');
   });
 
-  it('stage card caps nameplate previews at one primary plus two secondary', async () => {
+  it('stage card stacks up to five plates and overflows the rest into +N', async () => {
     setupUni();
     getNameplatePreview.mockReturnValue({
       previews: [
-        { id: 1, is_primary: true, display_text: '巴适', definition: '舒服', support_count: 12, supported_by_current_user: false },
-        { id: 2, display_text: '巴适得板', definition: '很舒服', support_count: 8, supported_by_current_user: false },
-        { id: 3, display_text: '安逸', definition: '舒适', support_count: 5, supported_by_current_user: false },
-        { id: 4, display_text: '要得', definition: '好的', support_count: 2, supported_by_current_user: false },
+        { id: 1, is_primary: true, display_text: '主牌', support_count: 0, supported_by_current_user: false },
+        { id: 2, display_text: '副一', support_count: 0, supported_by_current_user: false },
+        { id: 3, display_text: '副二', support_count: 0, supported_by_current_user: false },
+        { id: 4, display_text: '副三', support_count: 0, supported_by_current_user: false },
+        { id: 5, display_text: '副四', support_count: 0, supported_by_current_user: false },
+        { id: 6, display_text: '副五', support_count: 0, supported_by_current_user: false },
       ],
-      total: 7,
+      total: 6,
     });
 
     const wrapper = mount(CanStageCard, {
@@ -235,7 +241,7 @@ describe('immersive home (Issue #192)', () => {
           concept_text: '舒服',
           audio_url: 'https://example.com/a.mp3',
           nameplate_previews: [],
-          nameplate_total: 7,
+          nameplate_total: 6,
           recorder: { id: 3, nickname: '老乡', avatar: '' },
           submitted_dialect: { qualified_code: '西南官话.四川' },
           status: 'verified',
@@ -246,22 +252,21 @@ describe('immersive home (Issue #192)', () => {
     await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
 
-    const rows = wrapper.findAllComponents(NameplateVoteRow);
-    expect(rows).toHaveLength(3);
-    expect(wrapper.text()).toContain('安逸');
-    expect(wrapper.text()).not.toContain('要得');
-    expect(wrapper.text()).toContain('+ 4 张铭牌');
+    /* 堆叠至多 5 张（4 层厚度带），第 6 张进 +N */
+    expect(wrapper.findAllComponents(NameplateVoteRow)).toHaveLength(1);
+    expect(wrapper.findAll('.plate-stack__edge')).toHaveLength(4);
+    expect(wrapper.text()).toContain('主牌');
+    expect(wrapper.text()).not.toContain('副五');
+    expect(wrapper.text()).toContain('+ 1 张铭牌');
   });
 
-  it('secondary nameplates keep the action bar with all three actions in compact form', async () => {
+  it('tapping the top nameplate opens the can detail instead of the nameplate page', async () => {
     setupUni();
     getNameplatePreview.mockReturnValue({
       previews: [
-        { id: 1, is_primary: true, display_text: '巴适', definition: '舒服', support_count: 12, supported_by_current_user: false },
-        { id: 2, display_text: '巴适得板', definition: '很舒服', support_count: 8, supported_by_current_user: false },
-        { id: 3, display_text: '安逸', definition: '舒适', support_count: 5, supported_by_current_user: false },
+        { id: 1, is_primary: true, display_text: '巴适', support_count: 0, supported_by_current_user: false },
       ],
-      total: 3,
+      total: 1,
     });
 
     const wrapper = mount(CanStageCard, {
@@ -271,7 +276,7 @@ describe('immersive home (Issue #192)', () => {
           concept_text: '舒服',
           audio_url: 'https://example.com/a.mp3',
           nameplate_previews: [],
-          nameplate_total: 3,
+          nameplate_total: 1,
           recorder: { id: 3, nickname: '老乡', avatar: '' },
           submitted_dialect: { qualified_code: '西南官话.四川' },
           status: 'verified',
@@ -282,14 +287,14 @@ describe('immersive home (Issue #192)', () => {
     await wrapper.vm.$nextTick();
     await wrapper.vm.$nextTick();
 
-    const compactRow = wrapper.findAllComponents(NameplateVoteRow).at(1);
-    expect(compactRow.props('compact')).toBe(true);
-    /* Issue #218：副铭牌紧凑形态保留操作条，与主铭牌同构（支持/评论/立论） */
-    const actions = compactRow.find('.plate-card__actions');
-    expect(actions.exists()).toBe(true);
-    expect(compactRow.find('.vote-row__support').text()).toContain('支持 8');
-    expect(compactRow.find('.plate-card__comment').text()).toContain('评论 0');
-    expect(compactRow.find('.plate-card__action--debate').text()).toBe('立论');
+    await wrapper.find('.plate-card__body').trigger('tap');
+
+    expect(uni.navigateTo).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/pages/cans/details?id=11',
+    }));
+    expect(uni.navigateTo).not.toHaveBeenCalledWith(expect.objectContaining({
+      url: expect.stringContaining('/pages/nameplates/details'),
+    }));
   });
 
   it('guest voting asks for login instead of calling the API', async () => {
