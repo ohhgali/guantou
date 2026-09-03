@@ -853,7 +853,7 @@ class CanCardSerializer(serializers.ModelSerializer):
         top = sorted(
             active,
             key=lambda plate: (not plate.is_primary, -plate.weight, plate.id),
-        )[:3]
+        )[:5]
         previews = []
         for plate in top:
             supports = list(plate.supports.all())

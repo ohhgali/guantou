@@ -1026,17 +1026,17 @@ class CanNameplatePreviewTests(DomainFixture):
         self.assertEqual(response.status_code, 200)
         return next(item for item in response.data["results"] if item["id"] == can_id)
 
-    def test_previews_sorted_by_weight_desc_and_capped_at_three(self):
+    def test_previews_sorted_by_weight_desc_and_capped_at_five(self):
         can = self.make_can()
-        for text, weight in [("a", 10), ("b", 5), ("c", 30), ("d", 1), ("e", 20)]:
+        for text, weight in [("a", 10), ("b", 5), ("c", 30), ("d", 1), ("e", 20), ("f", 0)]:
             self.make_nameplate(can=can, text_content=text, weight=weight)
 
         item = self.can_payload(self.client.get("/cans/"), can.id)
         previews = item["nameplate_previews"]
-        self.assertEqual([p["weight"] for p in previews], [30, 20, 10])
-        self.assertEqual([p["display_text"] for p in previews], ["c", "e", "a"])
-        self.assertEqual(item["nameplate_total"], 5)
-        self.assertEqual(item["nameplate_count"], 5)
+        self.assertEqual([p["weight"] for p in previews], [30, 20, 10, 5, 1])
+        self.assertEqual([p["display_text"] for p in previews], ["c", "e", "a", "b", "d"])
+        self.assertEqual(item["nameplate_total"], 6)
+        self.assertEqual(item["nameplate_count"], 6)
 
     def test_supported_by_current_user_for_logged_in_and_guest(self):
         can = self.make_can()
